@@ -35,6 +35,7 @@ Two users (husband and wife) each maintain their own `QCD_Tracker_YYYY.xlsx` on 
 | `refresh_bmf.py` | Monthly script to download fresh IRS data (Tom's computer only) |
 | `eo_bmf_backup.csv` | Local fallback copy of IRS data (written by `refresh_bmf.py`) |
 | `modify_spreadsheet.py` | One-time setup script that inserts the Charity Address column |
+| `add_date_columns.py` | One-time setup script that inserts the three check date columns |
 | `build.bat` | Compiles `lookup_charity.py` into `lookup_charity.exe` |
 | `requirements.txt` | Python dependencies for Tom's computer |
 
@@ -186,14 +187,17 @@ Sheet: **QCD Transaction Log**
 | E | Charity EIN | `lookup_charity.exe` |
 | F | Charity Address | `lookup_charity.exe` |
 | G | Amount ($) | User |
-| H | Check / Wire Reference # | User |
-| I | Check Payable to Charity? (Y/N) | User |
-| J | Written Acknowledgment Received? (Y/N) | User |
-| K | Acknowledgment States No Goods/Services? (Y/N) | User |
-| L | Custodian Distribution Request Copy Saved? (Y/N) | User |
-| M | 501(c)(3) Status Verified? (Y/N) | User |
-| N | 1099-R Code Y Received? (Y/N) | User |
-| O | Notes | User |
+| H | Date Check Requested from IRA | User |
+| I | Date Check Received from IRA | User |
+| J | Date Check Mailed to Charity | User |
+| K | Check / Wire Reference # | User |
+| L | Check Payable to Charity? (Y/N) | User |
+| M | Written Acknowledgment Received? (Y/N) | User |
+| N | Acknowledgment States No Goods/Services? (Y/N) | User |
+| O | Custodian Distribution Request Copy Saved? (Y/N) | User |
+| P | 501(c)(3) Status Verified? (Y/N) | User |
+| Q | 1099-R Code Y Received? (Y/N) | User |
+| R | Notes | User |
 
 ---
 

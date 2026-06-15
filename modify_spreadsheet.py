@@ -21,9 +21,10 @@ HEADER_FONT  = Font(name="Arial", size=10, bold=True, color="FFFFFFFF")
 HEADER_FILL  = PatternFill(fill_type="solid", fgColor="FF2E75B6")
 HEADER_ALIGN = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
-BODY_FONT  = Font(name="Arial", size=10)
-BODY_FILL  = PatternFill(fill_type="solid", fgColor="FFF2F2F2")
-BODY_ALIGN = Alignment(vertical="top", wrap_text=True)
+BODY_FONT       = Font(name="Arial", size=10)
+BODY_FILL_GRAY  = PatternFill(fill_type="solid", fgColor="FFF2F2F2")
+BODY_FILL_WHITE = PatternFill(fill_type="solid", fgColor="FFFFFFFF")
+BODY_ALIGN      = Alignment(vertical="top", wrap_text=True)
 
 def _thin_border():
     s = Side(style="thin", color="FFBFBFBF")
@@ -69,12 +70,12 @@ def main():
     h.fill      = HEADER_FILL
     h.alignment = HEADER_ALIGN
 
-    # Body cells (rows 4-23)
+    # Body cells (rows 4-23) — even rows gray, odd rows white
     border = _thin_border()
     for row in range(4, 24):
         c = ws.cell(row=row, column=6)
         c.font      = BODY_FONT
-        c.fill      = BODY_FILL
+        c.fill      = BODY_FILL_GRAY if row % 2 == 0 else BODY_FILL_WHITE
         c.border    = border
         c.alignment = BODY_ALIGN
 

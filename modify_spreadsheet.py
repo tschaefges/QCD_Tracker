@@ -8,7 +8,6 @@ What it does:
   - Updates the SUM and REMAINING formulas that shifted from F to G
 """
 from pathlib import Path
-import glob as _glob
 
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Border, Side, Alignment

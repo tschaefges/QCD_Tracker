@@ -8,7 +8,9 @@
 #   https://www.irs.gov/charities-non-profits/exempt-organizations-business-master-file-extract-eo-bmf
 # If downloads fail, re-check that page — the IRS has changed these URLs in the past.
 
+import tempfile
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 
 import requests
@@ -43,7 +45,6 @@ def download_regional(filename):
     try:
         r = requests.get(url, timeout=120)
         r.raise_for_status()
-        from io import StringIO
         df = pd.read_csv(
             StringIO(r.content.decode("latin-1")),
             dtype=READ_DTYPE,
@@ -66,6 +67,18 @@ def filter_qcd_eligible(df):
     return df.loc[mask, KEEP_COLS].copy()
 
 
+def _safe_write_csv(df, target_path):
+    target_path = Path(target_path)
+    tmp_fd, tmp_name = tempfile.mkstemp(dir=target_path.parent, suffix=".tmp")
+    try:
+        with open(tmp_fd, "w", newline="", encoding="utf-8") as f:
+            df.to_csv(f, index=False)
+        Path(tmp_name).replace(target_path)
+    except Exception:
+        Path(tmp_name).unlink(missing_ok=True)
+        raise
+
+
 def main():
     print(f"QCD Charity Lookup — Refresh IRS EO BMF")
     print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -77,13 +90,19 @@ def main():
 
     print("Downloading regional EO BMF files from IRS...")
     frames = []
+    failed = []
     for filename in REGIONAL_FILES:
         df = download_regional(filename)
-        if df is not None:
+        if df is None:
+            failed.append(filename)
+        else:
             frames.append(df)
 
-    if not frames:
-        print("\nERROR: All downloads failed. Check your internet connection and the download URLs.")
+    if failed:
+        print("\nERROR: Refresh aborted. These regional files failed to download:")
+        for filename in failed:
+            print(f"  - {filename}")
+        print("Existing CSV files were not changed.")
         return
 
     print(f"\nCombining {len(frames)} regional files and filtering...")
@@ -91,16 +110,16 @@ def main():
     filtered = filter_qcd_eligible(combined)
     print(f"  {len(filtered):,} QCD-eligible organizations (501(c)(3), deductible, active)")
 
-    # Save local backup first (always succeeds if disk is writable)
+    # Save local backup (write to temp file, then replace to avoid partial writes)
     backup_path = SCRIPT_DIR / "eo_bmf_backup.csv"
-    filtered.to_csv(backup_path, index=False)
+    _safe_write_csv(filtered, backup_path)
     print(f"\nLocal backup saved: {backup_path}")
 
     # Save to server
     server_dir = Path(server_path)
     server_file = server_dir / "eo_bmf.csv"
     try:
-        filtered.to_csv(server_file, index=False)
+        _safe_write_csv(filtered, server_file)
         print(f"Server copy saved:  {server_file}")
     except Exception as exc:
         print(f"\nWARNING: Could not write to server ({exc})")

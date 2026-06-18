@@ -40,35 +40,55 @@ def read_config():
     return config_path.read_text().strip()
 
 
+def _try_read_csv(path):
+    try:
+        return pd.read_csv(path, dtype={"EIN": str, "ZIP": str}, encoding="utf-8")
+    except Exception as exc:
+        print(f"WARNING: Could not read {path.name}: {exc}")
+        return None
+
+
 def load_data(server_path):
     server_file = Path(server_path) / "eo_bmf.csv"
     backup_file = BASE_DIR / "eo_bmf_backup.csv"
 
+    df = None
     source_path = None
-    warned = False
 
     if server_file.exists():
-        source_path = server_file
-    else:
-        if backup_file.exists():
+        df = _try_read_csv(server_file)
+        if df is not None:
+            source_path = server_file
+        elif backup_file.exists():
             mod_date = datetime.fromtimestamp(backup_file.stat().st_mtime).strftime("%Y-%m-%d")
-            print(f"WARNING: Could not reach server at {server_path}")
-            print("Using local backup copy instead.")
+            print(f"WARNING: Server file exists but could not be read. Falling back to local backup.")
             print(f"Backup last updated: {mod_date}")
             print("Data may not be current.")
             print()
-            source_path = backup_file
-            warned = True
-        else:
-            print("ERROR: Could not find IRS data file.")
-            print(f"Tried: {server_file}")
-            print(f"Also tried: {backup_file}")
-            print("Please check that the server is running and try again,")
-            print("or run refresh_bmf.py to create a local backup.")
-            input("\nPress Enter to exit.")
-            sys.exit(1)
+            df = _try_read_csv(backup_file)
+            if df is not None:
+                source_path = backup_file
 
-    df = pd.read_csv(source_path, dtype={"EIN": str, "ZIP": str})
+    elif backup_file.exists():
+        mod_date = datetime.fromtimestamp(backup_file.stat().st_mtime).strftime("%Y-%m-%d")
+        print(f"WARNING: Could not reach server at {server_path}")
+        print("Using local backup copy instead.")
+        print(f"Backup last updated: {mod_date}")
+        print("Data may not be current.")
+        print()
+        df = _try_read_csv(backup_file)
+        if df is not None:
+            source_path = backup_file
+
+    if source_path is None:
+        print("ERROR: Could not find or read IRS data file.")
+        print(f"Tried: {server_file}")
+        print(f"Also tried: {backup_file}")
+        print("Please check that the server is running and try again,")
+        print("or run refresh_bmf.py to create a local backup.")
+        input("\nPress Enter to exit.")
+        sys.exit(1)
+
     data_date = datetime.fromtimestamp(source_path.stat().st_mtime).strftime("%Y-%m-%d")
     return df, data_date
 
@@ -118,7 +138,12 @@ def format_address(row):
 
 
 def find_next_row(xlsx_path):
-    wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    try:
+        wb = openpyxl.load_workbook(xlsx_path, read_only=True)
+    except PermissionError:
+        print(f"\nERROR: {xlsx_path.name} is open in another program.")
+        print("Please close it and try again.")
+        return None
     try:
         if SHEET_NAME not in wb.sheetnames:
             print(f"ERROR: Sheet '{SHEET_NAME}' not found in {xlsx_path.name}.")
@@ -139,26 +164,39 @@ def write_to_spreadsheet(xlsx_path, row_idx, name, ein_formatted, address):
         print(f"\nERROR: {xlsx_path.name} is open in another program.")
         print("Please close it and try again.")
         return False
-    if SHEET_NAME not in wb.sheetnames:
-        print(f"ERROR: Sheet '{SHEET_NAME}' not found.")
-        return False
 
-    ws = wb[SHEET_NAME]
+    try:
+        if SHEET_NAME not in wb.sheetnames:
+            print(f"ERROR: Sheet '{SHEET_NAME}' not found.")
+            return False
 
-    # Verify column F is Charity Address before writing
-    f3 = ws.cell(row=3, column=6).value
-    if f3 is None or "address" not in str(f3).lower():
-        print("\nERROR: Column F does not appear to be 'Charity Address'.")
-        print(f"  Found: {f3!r}")
-        print("  Please run modify_spreadsheet.py first to prepare the spreadsheet.")
-        return False
+        ws = wb[SHEET_NAME]
 
-    ws.cell(row=row_idx, column=4).value = name
-    ws.cell(row=row_idx, column=5).value = ein_formatted
-    ws.cell(row=row_idx, column=6).value = address
+        # Verify column F is Charity Address before writing
+        f3 = ws.cell(row=3, column=6).value
+        if f3 is None or "address" not in str(f3).lower():
+            print("\nERROR: Column F does not appear to be 'Charity Address'.")
+            print(f"  Found: {f3!r}")
+            print("  Please run modify_spreadsheet.py first to prepare the spreadsheet.")
+            return False
 
-    wb.save(xlsx_path)
-    return True
+        ws.cell(row=row_idx, column=4).value = name
+        ws.cell(row=row_idx, column=5).value = ein_formatted
+        ws.cell(row=row_idx, column=6).value = address
+
+        try:
+            wb.save(xlsx_path)
+        except PermissionError:
+            print(f"\nERROR: Could not save {xlsx_path.name}.")
+            print("Please close it in Excel and try again.")
+            return False
+        except OSError as exc:
+            print(f"\nERROR: Could not save {xlsx_path.name}: {exc}")
+            return False
+
+        return True
+    finally:
+        wb.close()
 
 
 # ---------------------------------------------------------------------------
@@ -230,7 +268,7 @@ def main():
             break
 
         # Step 2: search
-        results = df[df["NAME"].str.contains(term, case=False, na=False)]
+        results = df[df["NAME"].str.contains(term, case=False, na=False, regex=False)]
         if results.empty:
             print(f'\nNo matches found for "{term}". Try a shorter search term.\n')
             continue
